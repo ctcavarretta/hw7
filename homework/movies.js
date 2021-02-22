@@ -1,35 +1,79 @@
-window.addEventListener('DOMContentLoaded', async function(event) {
-  let db = firebase.firestore()
-  let apiKey = 'your TMDB API key'
+// window.addEventListener('DOMContentLoaded', async function(event) {
+let db = firebase.firestore()
+firebase.auth().onAuthStateChanged(async function(user) {
+  let apiKey = '8720ff01219b33c8a1581dedde14680a'
   let response = await fetch(`https://api.themoviedb.org/3/movie/now_playing?api_key=${apiKey}&language=en-US`)
   let json = await response.json()
   let movies = json.results
   console.log(movies)
-  
-  for (let i=0; i<movies.length; i++) {
-    let movie = movies[i]
-    let docRef = await db.collection('watched').doc(`${movie.id}`).get()
-    let watchedMovie = docRef.data()
-    let opacityClass = ''
-    if (watchedMovie) {
-      opacityClass = 'opacity-20'
-    }
 
-    document.querySelector('.movies').insertAdjacentHTML('beforeend', `
-      <div class="w-1/5 p-4 movie-${movie.id} ${opacityClass}">
-        <img src="https://image.tmdb.org/t/p/w500${movie.poster_path}" class="w-full">
-        <a href="#" class="watched-button block text-center text-white bg-green-500 mt-4 px-4 py-2 rounded">I've watched this!</a>
-      </div>
-    `)
+  // If someone is signed in
 
-    document.querySelector(`.movie-${movie.id}`).addEventListener('click', async function(event) {
-      event.preventDefault()
-      let movieElement = document.querySelector(`.movie-${movie.id}`)
-      movieElement.classList.add('opacity-20')
-      await db.collection('watched').doc(`${movie.id}`).set({})
-    }) 
+  if (user) {
+    console.log(`Signed in as ${user.displayName}`)
+    displayMovies(movies)
+    // Make Sign out button
+    document.querySelector('.sign-in-or-sign-out').innerHTML = 
+    `<button class = "sign-out-button text-white-500 underline">Sign Out</button>`
+    // Click to Sign Out
+      document.querySelector('.sign-out-button').addEventListener('click', function(event) {
+      firebase.auth().signOut()
+      document.location.href = 'movies.html'
+    })
+    db.collection('MoviesDB').doc(user.uid).set({
+      Id: user.uid,
+      name: user.displayName,
+      email: user.email      
+    })
   }
-})
+
+  // If no one is signed in
+
+    else {
+      console.log('No one is signed in')
+      document.querySelector('.movies').classList.add('Nothing')
+      let ui = new firebaseui.auth.AuthUI(firebase.auth())
+        let authUIConfig = {
+          signInOptions: [
+            firebase.auth.EmailAuthProvider.PROVIDER_ID
+          ],
+          signInSuccessURL: 'movies.html'
+        }
+      ui.start('.sign-in-or-sign-out', authUIConfig)
+    }
+  })
+
+  async function displayMovies(movies) {
+    for (let i=0; i<movies.length; i++) {
+      let currentUser = firebase.auth().currentUser
+      let movie = movies[i]
+      let docRef = await db.collection('watched').doc(`${movie.id}-${currentUser.uid}`).get()
+      let watchedMovie = docRef.data()
+      let opacityClass = ''
+        if (watchedMovie) {
+          opacityClass = 'opacity-20'
+        }
+
+        document.querySelector('.movies').insertAdjacentHTML('beforeend', `
+          <div class="w-1/5 p-4 movie-${movie.id} ${opacityClass}">
+            <img src="https://image.tmdb.org/t/p/w500${movie.poster_path}" class="w-full">
+            <a href="#" class="watched-button block text-center text-white bg-green-500 mt-4 px-4 py-2 rounded">I've watched this!</a>
+          </div>
+        `)
+
+        document.querySelector(`.movie-${movie.id}`).addEventListener('click', async function(event) {
+          event.preventDefault()
+          console.log('You have watched this movie!')
+          let currentUser = firebase.auth().currentUser
+          let movieElement = document.querySelector(`.movie-${movie.id}`)
+          movieElement.classList.add('opacity-20')
+            await db.collection('watched').doc(`${movie.id}-${currentUser.uid}`).set({
+              movieId: movie.id
+            })
+        }) 
+  }
+}
+
 
 // Goal:   Refactor the movies application from last week, so that it supports
 //         user login and each user can have their own watchlist.
@@ -54,4 +98,4 @@ window.addEventListener('DOMContentLoaded', async function(event) {
 //         This "composite" ID could simply be `${movieId}-${userId}`. This should 
 //         be set when the "I've watched" button on each movie is clicked. Likewise, 
 //         when the list of movies loads and is shown on the page, only the movies 
-//         watched by the currently logged-in user should be opaque.
+//         watched by the currently logged-in user should be opaque
